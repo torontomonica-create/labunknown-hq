@@ -12,7 +12,8 @@ function getAnthropicClient() {
   return new Anthropic({ apiKey: key });
 }
 
-// Claude 대화 JSONL에서 메시지 추출 (Claude Code 포맷)
+// ── Local-only helpers (skipped when paths don't exist) ──────────────────────
+
 function extractMessages(jsonlPath) {
   const content = fs.readFileSync(jsonlPath, 'utf8');
   const lines = content.trim().split('\n').filter(Boolean);
@@ -21,7 +22,6 @@ function extractMessages(jsonlPath) {
   for (const line of lines) {
     try {
       const entry = JSON.parse(line);
-      // queue-operation 등 제외, user/assistant 타입만
       if (entry.type !== 'user' && entry.type !== 'assistant') continue;
 
       const msgContent = entry.message?.content;
@@ -47,7 +47,6 @@ function extractMessages(jsonlPath) {
   return messages;
 }
 
-// Git summary
 function getGitSummary(repoPath) {
   try {
     const log = execSync(
@@ -66,7 +65,6 @@ function getGitSummary(repoPath) {
   }
 }
 
-// 로컬 폴더 최근 파일
 function getLocalSummary(folderPath) {
   try {
     const files = [];
@@ -86,56 +84,102 @@ function getLocalSummary(folderPath) {
   }
 }
 
-// POST /api/summary
-router.post('/', async (req, res) => {
-  const { type, projectPath, conversationId } = req.body;
+// ── POST /api/summary ────────────────────────────────────────────────────────
+// Two modes:
+//   1. Production (Railway): { text, projectName } → Claude API summary
+//   2. Local fallback: { type, projectPath, conversationId } → read local files
 
-  // Git/로컬은 API 없이 처리
+router.post('/', async (req, res) => {
+  const { type, projectPath, conversationId, text, projectName } = req.body;
+
+  // ── Mode 1: Production — generate summary via Claude API ──────────────────
+  if (text !== undefined || (projectName && !type && !projectPath)) {
+    const client = getAnthropicClient();
+    if (!client) {
+      return res.json({ summary: 'AI summary unavailable — API key not configured.' });
+    }
+
+    try {
+      const prompt = projectName
+        ? `Give a brief 2-3 sentence summary and one actionable suggestion for this project:\n\nProject: ${projectName}\n\n${text || ''}`
+        : `Give a brief 2-3 sentence summary and one actionable suggestion based on this:\n\n${text}`;
+
+      const message = await client.messages.create({
+        model: 'claude-opus-4-5',
+        max_tokens: 256,
+        messages: [{ role: 'user', content: prompt }],
+      });
+
+      const summary = message.content
+        .filter(b => b.type === 'text')
+        .map(b => b.text)
+        .join('');
+
+      return res.json({ summary });
+    } catch (err) {
+      return res.status(500).json({ error: err.message });
+    }
+  }
+
+  // ── Mode 2: Local fallback — only runs when path exists ──────────────────
+
+  // Git summary
   if (type === 'git') {
+    if (projectPath && !fs.existsSync(projectPath)) {
+      return res.json({ summary: 'Project folder not found on this machine.' });
+    }
     const data = getGitSummary(projectPath);
-    if (!data) return res.json({ summary: '커밋 정보를 가져올 수 없습니다.' });
+    if (!data) return res.json({ summary: 'Could not read git history.' });
 
     return res.json({
       lines: [
-        { label: '최근 커밋', content: data.log },
-        data.diff ? { label: '변경 파일', content: data.diff } : null,
+        { label: 'Recent commits', content: data.log },
+        data.diff ? { label: 'Changed files', content: data.diff } : null,
       ].filter(Boolean),
     });
   }
 
+  // Local folder summary
   if (type === 'local') {
+    if (projectPath && !fs.existsSync(projectPath)) {
+      return res.json({ summary: 'Project folder not found on this machine.' });
+    }
     const data = getLocalSummary(projectPath);
-    if (!data) return res.json({ summary: '폴더 정보를 가져올 수 없습니다.' });
+    if (!data) return res.json({ summary: 'Could not read folder.' });
 
     const fileList = data.files
       .map(f => {
         const age = Math.round((Date.now() - f.mtime) / (1000 * 60 * 60 * 24));
-        return `${f.isDir ? '📁' : '📄'} ${f.name}  (${age === 0 ? '오늘' : age + '일 전'})`;
+        return `${f.isDir ? '[dir]' : '[file]'} ${f.name}  (${age === 0 ? 'today' : age + 'd ago'})`;
       })
       .join('\n');
 
     return res.json({
-      lines: [{ label: '최근 수정 파일', content: fileList }],
+      lines: [{ label: 'Recently modified files', content: fileList }],
     });
   }
 
-  // Claude 대화 — 마지막 대화 원문 표시
+  // Claude JSONL conversation — local only
   if (type === 'claude') {
+    if (projectPath && !fs.existsSync(projectPath)) {
+      return res.json({ lines: [{ label: 'Unavailable', content: 'Conversation file not found on this machine.' }] });
+    }
+
     let messages;
     try {
       messages = extractMessages(projectPath);
     } catch {
-      return res.json({ lines: [{ label: '오류', content: '대화 파일을 읽을 수 없습니다.' }] });
+      return res.json({ lines: [{ label: 'Error', content: 'Could not read conversation file.' }] });
     }
 
     if (messages.length === 0) {
-      return res.json({ lines: [{ label: '내용 없음', content: '대화 내용이 없습니다.' }] });
+      return res.json({ lines: [{ label: 'Empty', content: 'No conversation content found.' }] });
     }
 
     const recent = messages.slice(-6);
     const formatted = recent
       .map(m => {
-        const who = m.role === 'user' ? '👤 James' : '🤖 Claude';
+        const who = m.role === 'user' ? 'James' : 'Claude';
         const text = m.text.length > 300 ? m.text.slice(0, 300) + '...' : m.text;
         return `${who}\n${text}`;
       })
@@ -143,12 +187,12 @@ router.post('/', async (req, res) => {
 
     return res.json({
       lines: [
-        { label: `마지막 대화 (${messages.length}개 중 최근 ${Math.min(6, messages.length)}개)`, content: formatted },
+        { label: `Last conversation (${Math.min(6, messages.length)} of ${messages.length})`, content: formatted },
       ],
     });
   }
 
-  res.status(400).json({ lines: [{ label: '오류', content: '알 수 없는 타입입니다.' }] });
+  res.status(400).json({ lines: [{ label: 'Error', content: 'Unknown summary type.' }] });
 });
 
 export default router;

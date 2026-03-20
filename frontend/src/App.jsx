@@ -8,12 +8,14 @@ import Login from './components/Login.jsx';
 import { supabase } from './lib/supabase.js';
 import './App.css';
 
+const apiBase = import.meta.env.VITE_API_URL || '';
+
 export default function App() {
   const [page, setPage] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [weather, setWeather] = useState(null);
   const [schedule, setSchedule] = useState([]);
-  const [sessions, setSessions] = useState([]);   // all Claude Code sessions (tasks)
+  const [sessions, setSessions] = useState([]);   // tasks from Supabase (+ local Claude Code on dev)
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
   const [authChecked, setAuthChecked] = useState(false);
@@ -35,69 +37,177 @@ export default function App() {
     setUser(null);
   };
 
+  // Load weather (backend), schedule + tasks (Supabase)
   useEffect(() => {
-    Promise.all([
-      fetch('/api/weather').then(r => r.json()),
-      fetch('/api/schedule').then(r => r.json()),
-      fetch('/api/projects').then(r => r.json()),
-    ]).then(([w, s, p]) => {
-      setWeather(w);
-      setSchedule(s);
-      setSessions(p);
-      setLoading(false);
-    }).catch(() => setLoading(false));
-  }, []);
+    if (!user) return;
+
+    const loadData = async () => {
+      try {
+        const [weatherRes, scheduleRes, tasksRes] = await Promise.all([
+          fetch(`${apiBase}/api/weather`).then(r => r.json()),
+          supabase
+            .from('schedule')
+            .select('*')
+            .eq('user_id', user.id)
+            .order('date'),
+          supabase
+            .from('tasks')
+            .select('*')
+            .eq('user_id', user.id)
+            .neq('status', 'completed')
+            .order('created_at', { ascending: false }),
+        ]);
+
+        setWeather(weatherRes);
+        setSchedule(scheduleRes.data || []);
+
+        // Map Supabase tasks to the shape components expect
+        const supabaseTasks = (tasksRes.data || []).map(t => ({
+          id: t.id,
+          name: t.title,
+          project: t.project,
+          status: t.status,
+          lastActivity: t.date || t.created_at,
+          lastMessage: t.project || '',
+          deferredToday: t.status === 'deferred',
+          type: 'supabase',
+          path: String(t.id), // unique key for components
+        }));
+
+        // On local dev, also scan Claude Code sessions and merge
+        if (import.meta.env.DEV) {
+          try {
+            const localRes = await fetch(`${apiBase}/api/projects`).then(r => r.json()).catch(() => []);
+            const localTasks = Array.isArray(localRes) ? localRes : [];
+            // Merge: local tasks first, then Supabase tasks
+            setSessions([...localTasks, ...supabaseTasks]);
+          } catch {
+            setSessions(supabaseTasks);
+          }
+        } else {
+          setSessions(supabaseTasks);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [user]);
 
   // Auto-refresh tasks every 30 seconds
   useEffect(() => {
-    const interval = setInterval(() => {
-      fetch('/api/projects').then(r => r.json()).then(p => setSessions(p)).catch(() => {});
+    if (!user) return;
+
+    const interval = setInterval(async () => {
+      const { data } = await supabase
+        .from('tasks')
+        .select('*')
+        .eq('user_id', user.id)
+        .neq('status', 'completed')
+        .order('created_at', { ascending: false });
+
+      const supabaseTasks = (data || []).map(t => ({
+        id: t.id,
+        name: t.title,
+        project: t.project,
+        status: t.status,
+        lastActivity: t.date || t.created_at,
+        lastMessage: t.project || '',
+        deferredToday: t.status === 'deferred',
+        type: 'supabase',
+        path: String(t.id),
+      }));
+
+      setSessions(prev => {
+        // Keep any local (non-supabase) sessions from the previous state
+        const localOnly = prev.filter(s => s.type !== 'supabase');
+        return [...localOnly, ...supabaseTasks];
+      });
     }, 30000);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [user]);
 
   const navigate = (p) => {
     setPage(p);
     setSidebarOpen(false);
   };
 
-  // Session (task) handlers
+  // Task handlers
   const handleDefer = async (sessionPath) => {
-    await fetch('/api/projects/defer', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectPath: sessionPath }),
-    });
-    setSessions(prev => prev.map(s => s.path === sessionPath ? { ...s, deferredToday: true } : s));
+    const session = sessions.find(s => s.path === sessionPath);
+    if (session?.type === 'supabase') {
+      await supabase
+        .from('tasks')
+        .update({ status: 'deferred' })
+        .eq('id', session.id)
+        .eq('user_id', user.id);
+    } else {
+      await fetch(`${apiBase}/api/projects/defer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath: sessionPath }),
+      });
+    }
+    setSessions(prev => prev.map(s => s.path === sessionPath ? { ...s, deferredToday: true, status: 'deferred' } : s));
   };
 
   const handleUndefer = async (sessionPath) => {
-    await fetch('/api/projects/undefer', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectPath: sessionPath }),
-    });
-    setSessions(prev => prev.map(s => s.path === sessionPath ? { ...s, deferredToday: false } : s));
+    const session = sessions.find(s => s.path === sessionPath);
+    if (session?.type === 'supabase') {
+      await supabase
+        .from('tasks')
+        .update({ status: 'active' })
+        .eq('id', session.id)
+        .eq('user_id', user.id);
+    } else {
+      await fetch(`${apiBase}/api/projects/undefer`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath: sessionPath }),
+      });
+    }
+    setSessions(prev => prev.map(s => s.path === sessionPath ? { ...s, deferredToday: false, status: 'active' } : s));
   };
 
   const handleComplete = async (sessionPath) => {
-    await fetch('/api/projects/complete', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ projectPath: sessionPath }),
-    });
+    const session = sessions.find(s => s.path === sessionPath);
+    if (session?.type === 'supabase') {
+      await supabase
+        .from('tasks')
+        .update({ status: 'completed' })
+        .eq('id', session.id)
+        .eq('user_id', user.id);
+    } else {
+      await fetch(`${apiBase}/api/projects/complete`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectPath: sessionPath }),
+      });
+    }
     setSessions(prev => prev.filter(s => s.path !== sessionPath));
   };
 
   // Schedule handlers
   const handleAddSchedule = async (item) => {
-    const res = await fetch('/api/schedule', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(item),
-    });
-    const newItem = await res.json();
-    setSchedule(prev => [...prev, newItem]);
+    const { data, error } = await supabase
+      .from('schedule')
+      .insert({ user_id: user.id, text: item.text, date: item.date, time: item.time })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setSchedule(prev => [...prev, data]);
+    }
   };
 
   const handleDeleteSchedule = async (id) => {
-    await fetch(`/api/schedule/${id}`, { method: 'DELETE' });
+    await supabase
+      .from('schedule')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+
     setSchedule(prev => prev.filter(s => s.id !== id));
   };
 
@@ -161,7 +271,7 @@ export default function App() {
           />
         )}
         {page === 'projects' && (
-          <ProjectsPage allSessions={sessions} />
+          <ProjectsPage allSessions={sessions} user={user} />
         )}
         {['clients', 'invoices', 'time', 'notes'].includes(page) && (
           <div className="coming-soon-page">

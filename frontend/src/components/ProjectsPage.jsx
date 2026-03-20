@@ -4,6 +4,7 @@ import {
   X, Check, FolderOpen, Bot, Edit2, Send
 } from 'lucide-react';
 import CaseStudyModal from './CaseStudyModal.jsx';
+import { supabase } from '../lib/supabase.js';
 import './ProjectsPage.css';
 
 const STATUS_OPTIONS = ['active', 'on hold', 'completed'];
@@ -25,7 +26,7 @@ function timeAgo(isoStr) {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-export default function ProjectsPage({ allSessions }) {
+export default function ProjectsPage({ allSessions, user }) {
   const [projects, setProjects] = useState([]);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newName, setNewName] = useState('');
@@ -33,56 +34,65 @@ export default function ProjectsPage({ allSessions }) {
   const [newColor, setNewColor] = useState('#7c5cbf');
 
   useEffect(() => {
-    fetch('/api/user-projects').then(r => r.json()).then(setProjects);
-  }, []);
+    if (!user) return;
+    supabase
+      .from('user_projects')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => {
+        // Normalize: Supabase user_projects don't have sessions array — add empty default
+        setProjects((data || []).map(p => ({ ...p, sessions: p.sessions || [] })));
+      });
+  }, [user]);
 
   const handleCreateProject = async (e) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    const res = await fetch('/api/user-projects', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName, description: newDesc, color: newColor }),
-    });
-    const created = await res.json();
-    setProjects(prev => [...prev, created]);
+    const { data, error } = await supabase
+      .from('user_projects')
+      .insert({ user_id: user.id, name: newName, description: newDesc, color: newColor, status: 'active', sessions: [] })
+      .select()
+      .single();
+
+    if (!error && data) {
+      setProjects(prev => [{ ...data, sessions: data.sessions || [] }, ...prev]);
+    }
     setNewName(''); setNewDesc(''); setNewColor('#7c5cbf');
     setShowNewForm(false);
   };
 
   const handleDeleteProject = async (id) => {
-    await fetch(`/api/user-projects/${id}`, { method: 'DELETE' });
+    await supabase.from('user_projects').delete().eq('id', id).eq('user_id', user.id);
     setProjects(prev => prev.filter(p => p.id !== id));
   };
 
   const handleUpdateProject = async (id, changes) => {
-    const res = await fetch(`/api/user-projects/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(changes),
-    });
-    const updated = await res.json();
-    setProjects(prev => prev.map(p => p.id === id ? updated : p));
+    const { data, error } = await supabase
+      .from('user_projects')
+      .update(changes)
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .select()
+      .single();
+
+    if (!error && data) {
+      setProjects(prev => prev.map(p => p.id === id ? { ...data, sessions: data.sessions || [] } : p));
+    }
   };
 
   const handleAddSession = async (projectId, session) => {
-    const res = await fetch(`/api/user-projects/${projectId}/sessions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionPath: session.path, sessionName: session.name }),
-    });
-    const updated = await res.json();
-    setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    const updatedSessions = [...(project.sessions || []), { path: session.path, name: session.name }];
+    await handleUpdateProject(projectId, { sessions: updatedSessions });
   };
 
   const handleRemoveSession = async (projectId, sessionPath) => {
-    const res = await fetch(`/api/user-projects/${projectId}/sessions`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionPath }),
-    });
-    const updated = await res.json();
-    setProjects(prev => prev.map(p => p.id === projectId ? updated : p));
+    const project = projects.find(p => p.id === projectId);
+    if (!project) return;
+    const updatedSessions = (project.sessions || []).filter(s => s.path !== sessionPath);
+    await handleUpdateProject(projectId, { sessions: updatedSessions });
   };
 
   const activeCount = projects.filter(p => p.status === 'active').length;
@@ -183,7 +193,7 @@ function ProjectCard({ project, allSessions, onDelete, onUpdate, onAddSession, o
 
   // Sessions not already in this project
   const availableSessions = allSessions.filter(
-    s => !project.sessions.find(ps => ps.path === s.path)
+    s => !(project.sessions || []).find(ps => ps.path === s.path)
   );
 
   const handleSaveEdit = () => {
@@ -285,7 +295,7 @@ function ProjectCard({ project, allSessions, onDelete, onUpdate, onAddSession, o
 
           {/* Expand */}
           <button className="proj-expand-btn" onClick={() => setExpanded(v => !v)}>
-            <span className="proj-session-count">{project.sessions.length} sessions</span>
+            <span className="proj-session-count">{(project.sessions || []).length} sessions</span>
             {expanded ? <ChevronUp size={14} strokeWidth={2} /> : <ChevronDown size={14} strokeWidth={2} />}
           </button>
         </div>
@@ -294,10 +304,10 @@ function ProjectCard({ project, allSessions, onDelete, onUpdate, onAddSession, o
       {/* Sessions list */}
       {expanded && (
         <div className="proj-sessions">
-          {project.sessions.length === 0 ? (
+          {(project.sessions || []).length === 0 ? (
             <p className="proj-no-sessions">No sessions linked yet.</p>
           ) : (
-            project.sessions.map(s => {
+            (project.sessions || []).map(s => {
               const liveSession = allSessions.find(ls => ls.path === s.path);
               return (
                 <div key={s.path} className="proj-session-item">

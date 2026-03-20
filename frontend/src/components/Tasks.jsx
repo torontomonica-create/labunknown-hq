@@ -16,8 +16,8 @@ function timeAgo(isoStr) {
 
 export default function Tasks({ sessions, onDefer, onUndefer, onComplete }) {
   const [showDeferred, setShowDeferred] = useState(false);
-  const active   = sessions.filter(s => !s.deferredToday);
-  const deferred = sessions.filter(s =>  s.deferredToday);
+  const active   = sessions.filter(s => s.status !== 'deferred' && !s.deferredToday);
+  const deferred = sessions.filter(s => s.status === 'deferred' || s.deferredToday);
 
   return (
     <div className="tasks-card">
@@ -68,15 +68,26 @@ function TaskItem({ session, deferred, onDefer, onUndefer, onComplete }) {
     if (summary) return;
     setLoadingSummary(true);
     try {
-      const res  = await fetch('/api/summary', {
+      const apiBase = import.meta.env.VITE_API_URL || '';
+      const body = session.type === 'supabase'
+        ? { text: session.lastMessage || '', projectName: session.name }
+        : { type: session.type, projectPath: session.path };
+      const res  = await fetch(`${apiBase}/api/summary`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: session.type, projectPath: session.path }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      setSummary(data.lines || []);
+      // Handle both { lines: [...] } and { summary: "..." } shapes
+      if (data.lines) {
+        setSummary(data.lines);
+      } else if (data.summary) {
+        setSummary([{ label: 'AI Summary', content: data.summary }]);
+      } else {
+        setSummary([{ label: 'Info', content: 'No summary available.' }]);
+      }
     } catch {
-      setSummary([{ label: 'Error', content: 'Could not load conversation history.' }]);
+      setSummary([{ label: 'Error', content: 'Could not load summary.' }]);
     } finally {
       setLoadingSummary(false);
     }
