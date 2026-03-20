@@ -217,6 +217,8 @@ export default function App() {
   // Show login if not authenticated
   if (!user) return <Login onLogin={setUser} />;
 
+  const isGuest = user?.email === 'guest@labunknown.demo';
+
   if (loading) {
     return (
       <div className="app-loading">
@@ -242,6 +244,14 @@ export default function App() {
 
       {/* Main content */}
       <main className="app-main">
+        {/* Demo mode banner */}
+        {isGuest && (
+          <div className="demo-banner">
+            <span className="demo-banner-dot" />
+            <span>Demo Mode — Sample data only. Sign in with an owner account to use full features.</span>
+          </div>
+        )}
+
         {/* Mobile top bar */}
         <div className="mobile-topbar">
           <button className="mobile-hamburger" onClick={() => setSidebarOpen(true)}>
