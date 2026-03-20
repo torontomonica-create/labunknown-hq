@@ -188,6 +188,30 @@ export default function App() {
     setSessions(prev => prev.filter(s => s.path !== sessionPath));
   };
 
+  // Add task handler
+  const handleAddTask = async ({ title, project }) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({ user_id: user.id, title, project, status: 'active', date: new Date().toISOString().split('T')[0] })
+      .select()
+      .single();
+
+    if (!error && data) {
+      const newTask = {
+        id: data.id,
+        name: data.title,
+        project: data.project,
+        status: data.status,
+        lastActivity: data.date || data.created_at,
+        lastMessage: data.project || '',
+        deferredToday: false,
+        type: 'supabase',
+        path: String(data.id),
+      };
+      setSessions(prev => [newTask, ...prev]);
+    }
+  };
+
   // Schedule handlers
   const handleAddSchedule = async (item) => {
     const { data, error } = await supabase
@@ -268,6 +292,7 @@ export default function App() {
             onDefer={handleDefer}
             onUndefer={handleUndefer}
             onComplete={handleComplete}
+            onAddTask={handleAddTask}
             onAddSchedule={handleAddSchedule}
             onDeleteSchedule={handleDeleteSchedule}
             onNavigateCalendar={() => navigate('calendar')}

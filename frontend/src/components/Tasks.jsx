@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bot, ChevronDown, ChevronUp, SkipForward, RotateCcw, CheckCircle, Loader } from 'lucide-react';
+import { Bot, ChevronDown, ChevronUp, SkipForward, RotateCcw, CheckCircle, Loader, Plus, X } from 'lucide-react';
 import './Tasks.css';
 
 function timeAgo(isoStr) {
@@ -14,10 +14,23 @@ function timeAgo(isoStr) {
   return `${Math.floor(days / 30)}mo ago`;
 }
 
-export default function Tasks({ sessions, onDefer, onUndefer, onComplete }) {
+export default function Tasks({ sessions, onDefer, onUndefer, onComplete, onAddTask }) {
   const [showDeferred, setShowDeferred] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newProject, setNewProject] = useState('');
+
   const active   = sessions.filter(s => s.status !== 'deferred' && !s.deferredToday);
   const deferred = sessions.filter(s => s.status === 'deferred' || s.deferredToday);
+
+  const handleAddSubmit = async (e) => {
+    e.preventDefault();
+    if (!newTitle.trim()) return;
+    await onAddTask?.({ title: newTitle.trim(), project: newProject.trim() || null });
+    setNewTitle('');
+    setNewProject('');
+    setShowAddForm(false);
+  };
 
   return (
     <div className="tasks-card">
@@ -31,10 +44,38 @@ export default function Tasks({ sessions, onDefer, onUndefer, onComplete }) {
               {showDeferred ? <ChevronUp size={13} strokeWidth={2} /> : <ChevronDown size={13} strokeWidth={2} />}
             </button>
           )}
+          <button className="btn-add-task" onClick={() => setShowAddForm(v => !v)} title="Add task">
+            {showAddForm ? <X size={14} strokeWidth={2.5} /> : <Plus size={14} strokeWidth={2.5} />}
+          </button>
         </div>
       </div>
 
-      {active.length === 0 && (
+      {/* Add task form */}
+      {showAddForm && (
+        <form className="add-task-form" onSubmit={handleAddSubmit}>
+          <input
+            className="add-task-input"
+            type="text"
+            placeholder="Task name"
+            value={newTitle}
+            onChange={e => setNewTitle(e.target.value)}
+            autoFocus
+          />
+          <input
+            className="add-task-input"
+            type="text"
+            placeholder="Project (optional)"
+            value={newProject}
+            onChange={e => setNewProject(e.target.value)}
+          />
+          <div className="add-task-actions">
+            <button type="submit" className="btn-task-save">Add</button>
+            <button type="button" className="btn-task-cancel" onClick={() => setShowAddForm(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {active.length === 0 && !showAddForm && (
         <p className="tasks-empty">All clear — nothing to continue today</p>
       )}
 

@@ -6,7 +6,7 @@ import './Dashboard.css';
 
 export default function Dashboard({
   weather, schedule, sessions,
-  onDefer, onUndefer, onComplete,
+  onDefer, onUndefer, onComplete, onAddTask,
   onAddSchedule, onDeleteSchedule,
   onNavigateCalendar,
 }) {
@@ -28,6 +28,7 @@ export default function Dashboard({
             onDefer={onDefer}
             onUndefer={onUndefer}
             onComplete={onComplete}
+            onAddTask={onAddTask}
           />
         </div>
       </div>
