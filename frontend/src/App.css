@@ -1,0 +1,103 @@
+.app-layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: #f7f7f7;
+}
+
+.app-main {
+  flex: 1;
+  overflow-y: auto;
+  background: #f7f7f7;
+  min-width: 0;
+}
+
+/* Mobile top bar */
+.mobile-topbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: #0a0a0a;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.mobile-hamburger {
+  background: none;
+  border: none;
+  color: #FF5C00;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+
+.mobile-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #FF5C00;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Sidebar overlay on mobile */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 99;
+}
+
+/* Loading */
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  width: 100vw;
+  background: #f7f7f7;
+}
+
+.app-loading-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2px solid #e8e8e8;
+  border-top-color: #0a0a0a;
+  border-radius: 50%;
+  animation: spin 0.6s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Coming soon */
+.coming-soon-page {
+  padding: 80px 40px;
+  text-align: center;
+  color: #555555;
+}
+
+.coming-soon-page h2 {
+  font-size: 28px;
+  font-weight: 700;
+  color: #0a0a0a;
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.coming-soon-page p { font-size: 14px; }
+
+/* ── Mobile breakpoint ── */
+@media (max-width: 768px) {
+  .mobile-topbar { display: flex; }
+  .sidebar-overlay { display: block; }
+
+  .app-main {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

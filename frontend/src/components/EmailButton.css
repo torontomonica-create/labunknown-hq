@@ -1,0 +1,47 @@
+.email-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.email-card-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.email-icon {
+  font-size: 1.4rem;
+}
+
+.email-card-title h2 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #1a1a2e;
+}
+
+.email-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.email-btn {
+  display: inline-block;
+  background: #4f8ef7;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 10px;
+  padding: 10px 18px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: center;
+  transition: background 0.15s;
+}
+
+.email-btn:hover {
+  background: #3a7de8;
+}

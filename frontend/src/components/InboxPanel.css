@@ -1,0 +1,58 @@
+.inbox-panel {
+  margin-bottom: 4px;
+}
+
+.inbox-label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #555555;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+.inbox-links {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.inbox-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 18px 11px 14px;
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: 'Manrope', sans-serif;
+  color: #0a0a0a;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 100ms, border-color 100ms, transform 80ms;
+}
+
+.inbox-btn:hover {
+  background: #ebebeb;
+  border-color: #cccccc;
+  transform: translateY(-1px);
+}
+
+.inbox-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.inbox-name {
+  font-weight: 600;
+}
+
+.inbox-arrow {
+  color: #555555;
+}
