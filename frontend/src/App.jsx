@@ -4,6 +4,8 @@ import Sidebar from './components/Sidebar.jsx';
 import Dashboard from './components/Dashboard.jsx';
 import CalendarView from './components/CalendarView.jsx';
 import ProjectsPage from './components/ProjectsPage.jsx';
+import Login from './components/Login.jsx';
+import { supabase } from './lib/supabase.js';
 import './App.css';
 
 export default function App() {
@@ -13,6 +15,25 @@ export default function App() {
   const [schedule, setSchedule] = useState([]);
   const [sessions, setSessions] = useState([]);   // all Claude Code sessions (tasks)
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // Auth state
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthChecked(true);
+    });
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
   useEffect(() => {
     Promise.all([
@@ -79,6 +100,12 @@ export default function App() {
     await fetch(`/api/schedule/${id}`, { method: 'DELETE' });
     setSchedule(prev => prev.filter(s => s.id !== id));
   };
+
+  // Show nothing until auth is checked
+  if (!authChecked) return null;
+
+  // Show login if not authenticated
+  if (!user) return <Login onLogin={setUser} />;
 
   if (loading) {
     return (

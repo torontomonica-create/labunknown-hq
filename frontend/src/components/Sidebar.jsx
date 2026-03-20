@@ -1,4 +1,5 @@
-import { ExternalLink, LayoutDashboard, Calendar, FolderKanban, Users, FileText, Clock, StickyNote, Settings } from 'lucide-react';
+import { ExternalLink, LayoutDashboard, Calendar, FolderKanban, Users, FileText, Clock, StickyNote, Settings, LogOut } from 'lucide-react';
+import { supabase } from '../lib/supabase.js';
 import './Sidebar.css';
 
 const NAV_ITEMS = [
@@ -77,6 +78,14 @@ export default function Sidebar({ currentPage, onNavigate, isOpen, onClose }) {
           <Settings size={16} strokeWidth={1.8} className="sidebar-icon" />
           <span className="sidebar-label">Settings</span>
           <span className="sidebar-soon">Soon</span>
+        </button>
+
+        <button
+          className="sidebar-item sidebar-item--logout"
+          onClick={() => supabase.auth.signOut()}
+        >
+          <LogOut size={16} strokeWidth={1.8} className="sidebar-icon" />
+          <span className="sidebar-label">Sign Out</span>
         </button>
       </div>
     </nav>
