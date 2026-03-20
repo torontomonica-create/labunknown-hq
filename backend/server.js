@@ -15,12 +15,14 @@ import { exec } from 'child_process';
 import weatherRouter from './routes/weather.js';
 import summaryRouter from './routes/summary.js';
 import caseStudyRouter from './routes/casestudy.js';
+import projectsRouter from './routes/projects.js';
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 const allowedOrigins = [
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:4173',
   process.env.FRONTEND_URL,
 ].filter(Boolean);
@@ -43,6 +45,7 @@ app.use(express.json());
 app.use('/api/weather', weatherRouter);
 app.use('/api/summary', summaryRouter);
 app.use('/api/case-study', caseStudyRouter);
+app.use('/api/projects', projectsRouter); // local only — Claude Code session scanner
 
 // Open URL in default browser (local only — no-op on Railway)
 app.post('/api/open-url', (req, res) => {
