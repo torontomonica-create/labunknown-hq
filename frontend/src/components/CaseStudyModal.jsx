@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, Check, Loader, ExternalLink, Plus, Trash2, Sparkles } from 'lucide-react';
 import './CaseStudyModal.css';
 
+const apiBase = import.meta.env.VITE_API_URL || '';
+
 const EMPTY_SECTION  = { label: '', title: '', body: '', callout: '' };
 const EMPTY_STEP     = { title: '', text: '' };
 const EMPTY_FEATURE  = { title: '', text: '' };
@@ -52,7 +54,7 @@ export default function CaseStudyModal({ project, onClose }) {
     setGenerating(true);
     setError('');
     try {
-      const res = await fetch('/api/case-study/generate', {
+      const res = await fetch(`${apiBase}/api/case-study/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ project }),
@@ -101,7 +103,7 @@ export default function CaseStudyModal({ project, onClose }) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch('/api/case-study', {
+      const res = await fetch(`${apiBase}/api/case-study`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -366,7 +368,7 @@ export default function CaseStudyModal({ project, onClose }) {
             <div className="cs-done-actions">
               <button
                 className="cs-done-open"
-                onClick={() => fetch('/api/open-url', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'https://labunknown.ca' }) })}
+                onClick={() => fetch(`${apiBase}/api/open-url`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ url: 'https://labunknown.ca' }) })}
               >
                 <ExternalLink size={14} strokeWidth={2} /> Visit labunknown.ca
               </button>
